@@ -94,6 +94,29 @@ def make_handler(service: Service, static_dir: str):
                     actor, role = self._identity()
                     del actor
                     self._json(200, service.get_item(item_id, role))
+                elif path == "/api/teams":
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, {"teams": service.list_teams(role)})
+                elif path == "/api/materials":
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, {"materials": service.list_materials(role)})
+                elif path == "/api/dispatch":
+                    actor, role = self._identity()
+                    del actor
+                    status = parse_qs(urlparse(self.path).query).get("status", [None])[0]
+                    self._json(200, {"orders": service.list_dispatch(role, status)})
+                elif path.startswith("/api/dispatch/") and path.endswith("/receipt"):
+                    dispatch_no = path.split("/")[3]
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, {"receipt": service.get_outbound_receipt(dispatch_no, role)})
+                elif path.startswith("/api/dispatch/"):
+                    dispatch_no = path.split("/")[3]
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, service.get_dispatch(dispatch_no, role))
                 elif path == "/api/audit":
                     actor, role = self._identity()
                     del actor
@@ -119,6 +142,19 @@ def make_handler(service: Service, static_dir: str):
                     expected = body.get("expected_version")
                     self._json(200, service.transition(
                         item_id, target, expected, actor, role))
+                elif path == "/api/teams":
+                    self._json(201, service.create_team(body, actor, role))
+                elif path == "/api/materials":
+                    self._json(201, service.create_material(body, actor, role))
+                elif path == "/api/dispatch":
+                    self._json(201, service.dispatch(body, actor, role))
+                elif path.startswith("/api/dispatch/") and path.endswith("/retry"):
+                    dispatch_no = path.split("/")[3]
+                    self._json(200, service.retry_dispatch(dispatch_no, actor, role))
+                elif path.startswith("/api/dispatch/") and path.endswith("/receipt"):
+                    dispatch_no = path.split("/")[3]
+                    self._json(201, service.create_outbound_receipt(
+                        dispatch_no, body, actor, role))
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:

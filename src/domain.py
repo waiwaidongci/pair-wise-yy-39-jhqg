@@ -1,6 +1,6 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 class ErrorKind:
     VALIDATION="validation"; NOT_FOUND="not_found"; FORBIDDEN="forbidden"; CONFLICT="conflict"
 class DomainError(Exception):
@@ -20,6 +20,20 @@ class Record:
 @dataclass(frozen=True)
 class AuditEntry:
     id:int; action:str; entity_type:str; entity_id:int; actor:str; detail:Dict[str,Any]; previous_hash:str; entry_hash:str; created_at:str
+@dataclass(frozen=True)
+class Team:
+    id:int; name:str; capacity:int; created_at:str
+@dataclass(frozen=True)
+class Material:
+    id:int; name:str; sku:str; stock:float; unit:str; created_at:str
+@dataclass(frozen=True)
+class DispatchOrder:
+    id:int; dispatch_no:str; item_id:int; team_id:Optional[int]; status:str
+    gap:Optional[Dict[str,Any]]; version:int; created_by:str; created_at:str; updated_at:str
+@dataclass(frozen=True)
+class OutboundReceipt:
+    id:int; receipt_no:str; dispatch_no:str; status:str
+    lines:List[Dict[str,Any]]; created_by:str; created_at:str; updated_at:str
 def require_text(value,field,max_length=2000):
     if not isinstance(value,str) or not value.strip(): raise ValidationError(f"{field}不能为空")
     value=value.strip()

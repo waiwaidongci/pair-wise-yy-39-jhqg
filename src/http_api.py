@@ -76,6 +76,7 @@ def make_handler(service: Service, static_dir: str):
         def do_GET(self) -> None:
             try:
                 path = urlparse(self.path).path
+                actor, role = self._identity()
                 if path == "/health":
                     self._json(200, {"status": "ok"})
                 elif path == "/":
@@ -98,6 +99,30 @@ def make_handler(service: Service, static_dir: str):
                     actor, role = self._identity()
                     del actor
                     self._json(200, {"events": service.audit(role)})
+                elif path == "/api/crews":
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, {"crews": service.list_crews(role)})
+                elif path == "/api/materials":
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, {"materials": service.list_materials(role)})
+                elif path.startswith("/api/materials/") and path.endswith("/inbound"):
+                    material_id = int(path.split("/")[3])
+                    self._json(200, service.inbound_material(material_id, body, actor, role))
+                elif path == "/api/dispatches":
+                    query = parse_qs(urlparse(self.path).query)
+                    status = query.get("status", [None])[0]
+                    self._json(200, {"dispatches": service.list_dispatches(role, status)})
+                elif path.startswith("/api/dispatches/") and path.endswith("/receipt"):
+                    dispatch_id = int(path.split("/")[3])
+                    self._json(200, service.post_receipt(dispatch_id, body, actor, role))
+                elif path.startswith("/api/dispatches/") and path.endswith("/retry"):
+                    dispatch_id = int(path.split("/")[3])
+                    self._json(200, service.retry_dispatch(dispatch_id, actor, role))
+                elif path.startswith("/api/dispatches/"):
+                    dispatch_id = int(path.rsplit("/", 1)[-1])
+                    self._json(200, service.get_dispatch(dispatch_id, role))
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:
@@ -119,6 +144,21 @@ def make_handler(service: Service, static_dir: str):
                     expected = body.get("expected_version")
                     self._json(200, service.transition(
                         item_id, target, expected, actor, role))
+                elif path == "/api/crews":
+                    self._json(201, service.create_crew(body, actor, role))
+                elif path == "/api/materials":
+                    self._json(201, service.create_material(body, actor, role))
+                elif path.startswith("/api/materials/") and path.endswith("/inbound"):
+                    material_id = int(path.split("/")[3])
+                    self._json(200, service.inbound_material(material_id, body, actor, role))
+                elif path == "/api/dispatches":
+                    self._json(201, service.submit_dispatch(body, actor, role))
+                elif path.startswith("/api/dispatches/") and path.endswith("/receipt"):
+                    dispatch_id = int(path.split("/")[3])
+                    self._json(200, service.post_receipt(dispatch_id, body, actor, role))
+                elif path.startswith("/api/dispatches/") and path.endswith("/retry"):
+                    dispatch_id = int(path.split("/")[3])
+                    self._json(200, service.retry_dispatch(dispatch_id, actor, role))
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:

@@ -34,6 +34,23 @@ python3 app.py --db ./data.db --port 8316
 
 允许角色：inspector, dam_engineer, emergency_manager, viewer。异常值比控制阈值越高，缺陷优先级越高；应急处置缺陷必须完成复检并记录证据后才能关闭。
 
+## 汛期应急派工调度
+
+把缺陷、抢险班组、堵漏物资和出库回执接成一条流程，角色为emergency_manager。
+
+- `POST /api/crews`：建班组，`{"name","capacity"}`；`GET /api/crews` 查看空闲席位。
+- `POST /api/materials`：建物资，`{"name","unit","stock"}`；`GET /api/materials` 查看可用库存（库存扣减已派工预占）；`POST /api/materials/{id}/inbound` 补货，补货后自动按FIFO尝试提升排队单。
+- `POST /api/dispatches`：派工，载荷 `{"item_id","crew_id","idempotency_key"?, "materials":[{"material_id","request_qty"}...]}`。
+  - 同一缺陷只允许一笔进行中（queued/dispatched）的派工，两个值班员同时提交只有一笔成功，另一笔409。
+  - 班组席位或物资可用量不足时进入`queued`，`gaps`逐项写明缺口（班组缺席数、物资需求量/可用量/缺口量），排队单不占资源。
+- `POST /api/dispatches/{id}/retry`：按**原派工号**重试排队单，只预占"申请量-已发量"的差额，已发料不会被重复占用。
+- `POST /api/dispatches/{id}/receipt`：出库回执逐项对账，载荷 `{"receipt_no","lines":[{"material_id","issued_qty"}...]}`，必须覆盖全部申请项（已发齐项以0对账）。
+  - 全部按待发量发足：`outcome=full`，扣减库存、核销预占、派工`receipted`，并自动尝试提升排队单。
+  - 任一项实发不足：`outcome=short`，按实发扣库，释放本次全部预占，派工回`queued`并在`gaps`写明缺口，回执已持久化，按原派工号重试。
+  - 回执写入失败：事务整体回滚（不扣库不留回执），`outcome=write_failed`，释放本次预占并回`queued`。
+  - 同一`receipt_no`重放返回`outcome=replayed`，不会重复扣库；`idempotency_key`重放返回原派工。
+- `GET /api/dispatches?status=queued|dispatched|receipted` 与 `GET /api/dispatches/{id}` 查询派工、明细和缺口。
+
 ## 测试
 
 ```bash
